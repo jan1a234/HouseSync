@@ -1,214 +1,158 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { User, RecurringType } from '../src/types';
-import { storageService } from '../src/services/storage';
+import { router } from 'expo-router';
+import { addTask, getUsers } from '../utils/storage';
+import { User } from '../utils/types';
 
 export default function AddTask() {
-  const router = useRouter();
   const [title, setTitle] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
-  const [points, setPoints] = useState('');
-  const [recurring, setRecurring] = useState<RecurringType>(null);
+  const [assignee, setAssignee] = useState('');
+  const [points, setPoints] = useState('1');
+  const [recurring, setRecurring] = useState<'none' | 'daily' | 'weekly'>('none');
   const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
+    const loadUsers = async () => {
+      const loadedUsers = await getUsers();
+      setUsers(loadedUsers);
+      if (loadedUsers.length > 0) {
+        setAssignee(loadedUsers[0].name);
+      }
+    };
     loadUsers();
   }, []);
 
-  const loadUsers = async () => {
-    const loadedUsers = await storageService.getUsers();
-    setUsers(loadedUsers);
-    if (loadedUsers.length > 0) {
-      setAssignedTo(loadedUsers[0].id);
-    }
-  };
-
   const handleSubmit = async () => {
-    if (!title.trim() || !points.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!title.trim()) {
+      Alert.alert('Fehler', 'Bitte gib einen Titel ein');
       return;
     }
 
-    const newTask = {
-      id: Date.now().toString(),
+    const pointsNum = parseInt(points);
+    if (isNaN(pointsNum) || pointsNum < 1) {
+      Alert.alert('Fehler', 'Punkte müssen eine Zahl größer 0 sein');
+      return;
+    }
+
+    await addTask({
       title: title.trim(),
-      assignedTo,
-      points: parseInt(points, 10),
+      assignee,
+      points: pointsNum,
       completed: false,
       recurring,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    const tasks = await storageService.getTasks();
-    tasks.push(newTask);
-    await storageService.saveTasks(tasks);
-
-    Alert.alert('Success', 'Task added successfully!', [
-      { text: 'OK', onPress: () => router.push('/') }
-    ]);
-    
     setTitle('');
-    setPoints('');
-    setRecurring(null);
+    setPoints('1');
+    setRecurring('none');
+    
+    Alert.alert('Erfolg', 'Task wurde hinzugefügt');
+    router.push('/');
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Task Title *</Text>
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Enter task title"
-            placeholderTextColor="#999"
-          />
-        </View>
+    <View style={styles.container}>
+      <Text style={styles.title}>Neue Aufgabe hinzufügen</Text>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Assign To</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={assignedTo}
-              onValueChange={setAssignedTo}
-              style={styles.picker}
-            >
-              {users.map((user) => (
-                <Picker.Item key={user.id} label={user.name} value={user.id} />
-              ))}
-            </Picker>
-          </View>
-        </View>
+      <Text style={styles.label}>Titel</Text>
+      <TextInput
+        style={styles.input}
+        value={title}
+        onChangeText={setTitle}
+        placeholder="z.B. Küche putzen"
+      />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Points *</Text>
-          <TextInput
-            style={styles.input}
-            value={points}
-            onChangeText={setPoints}
-            placeholder="Enter points (e.g., 10)"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Recurring</Text>
-          <View style={styles.recurringButtons}>
-            <TouchableOpacity
-              style={[styles.recurringButton, recurring === null && styles.recurringActive]}
-              onPress={() => setRecurring(null)}
-            >
-              <Text style={[styles.recurringButtonText, recurring === null && styles.recurringActiveText]}>
-                None
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.recurringButton, recurring === 'daily' && styles.recurringActive]}
-              onPress={() => setRecurring('daily')}
-            >
-              <Text style={[styles.recurringButtonText, recurring === 'daily' && styles.recurringActiveText]}>
-                Daily
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.recurringButton, recurring === 'weekly' && styles.recurringActive]}
-              onPress={() => setRecurring('weekly')}
-            >
-              <Text style={[styles.recurringButtonText, recurring === 'weekly' && styles.recurringActiveText]}>
-                Weekly
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitButtonText}>Add Task</Text>
-        </TouchableOpacity>
+      <Text style={styles.label}>Zuweisen an</Text>
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={assignee}
+          onValueChange={setAssignee}
+          style={styles.picker}
+        >
+          {users.map((user) => (
+            <Picker.Item key={user.id} label={user.name} value={user.name} />
+          ))}
+        </Picker>
       </View>
-    </ScrollView>
+
+      <Text style={styles.label}>Punkte</Text>
+      <TextInput
+        style={styles.input}
+        value={points}
+        onChangeText={setPoints}
+        placeholder="1"
+        keyboardType="numeric"
+      />
+
+      <Text style={styles.label}>Wiederholen</Text>
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={recurring}
+          onValueChange={setRecurring}
+          style={styles.picker}
+        >
+          <Picker.Item label="Nicht wiederholen" value="none" />
+          <Picker.Item label="Täglich" value="daily" />
+          <Picker.Item label="Wöchentlich" value="weekly" />
+        </Picker>
+      </View>
+
+      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Hinzufügen</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
   },
-  form: {
-    padding: 20,
-  },
-  inputGroup: {
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1F2937',
     marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#374151',
+    marginTop: 16,
     marginBottom: 8,
-    color: '#333',
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    backgroundColor: '#F9FAFB',
+    minHeight: 48,
   },
   pickerContainer: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#D1D5DB',
     borderRadius: 8,
-    overflow: 'hidden',
+    backgroundColor: '#F9FAFB',
+    minHeight: 48,
   },
   picker: {
-    height: 50,
+    height: 48,
   },
-  recurringButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  recurringButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  recurringActive: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
-  },
-  recurringButtonText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  recurringActiveText: {
-    color: '#fff',
-  },
-  submitButton: {
-    backgroundColor: '#4A90E2',
+  button: {
+    backgroundColor: '#3B82F6',
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 24,
+    minHeight: 48,
   },
-  submitButtonText: {
-    color: '#fff',
+  buttonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },

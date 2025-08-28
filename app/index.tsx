@@ -1,153 +1,107 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  RefreshControl,
-} from 'react-native';
-import { Task, User } from '../src/types';
-import { storageService } from '../src/services/storage';
-import { Ionicons } from '@expo/vector-icons';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { getTasks, completeTask } from '../utils/storage';
+import { Task } from '../utils/types';
 
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = async () => {
-    const [loadedTasks, loadedUsers] = await Promise.all([
-      storageService.getTasks(),
-      storageService.getUsers(),
-    ]);
-    setTasks(loadedTasks.filter(t => !t.completed));
-    setUsers(loadedUsers);
+  const loadTasks = async () => {
+    const loadedTasks = await getTasks();
+    setTasks(loadedTasks);
   };
 
   useEffect(() => {
-    loadData();
-    storageService.resetDailyTasks();
-    storageService.resetWeeklyTasks();
+    loadTasks();
   }, []);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+  const handleTaskComplete = async (taskId: string) => {
+    await completeTask(taskId);
+    loadTasks();
   };
-
-  const handleCompleteTask = async (taskId: string) => {
-    await storageService.completeTask(taskId);
-    await loadData();
-  };
-
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || 'Unassigned';
-  };
-
-  const renderTask = ({ item }: { item: Task }) => (
-    <View style={styles.taskCard}>
-      <View style={styles.taskInfo}>
-        <Text style={styles.taskTitle}>{item.title}</Text>
-        <View style={styles.taskMeta}>
-          <Text style={styles.taskUser}>{getUserName(item.assignedTo)}</Text>
-          <Text style={styles.taskPoints}>{item.points} pts</Text>
-          {item.recurring && (
-            <View style={styles.recurringBadge}>
-              <Text style={styles.recurringText}>{item.recurring}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <TouchableOpacity
-        style={styles.completeButton}
-        onPress={() => handleCompleteTask(item.id)}
-      >
-        <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
-      </TouchableOpacity>
-    </View>
-  );
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={tasks}
-        renderItem={renderTask}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No pending tasks</Text>
-        }
-      />
-    </View>
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Tasks</Text>
+      {tasks.map((task) => (
+        <View key={task.id} style={styles.taskItem}>
+          <TouchableOpacity
+            style={[styles.checkbox, task.completed && styles.checkboxCompleted]}
+            onPress={() => handleTaskComplete(task.id)}
+          >
+            {task.completed && <Text style={styles.checkmark}>✓</Text>}
+          </TouchableOpacity>
+          <View style={styles.taskDetails}>
+            <Text style={[styles.taskTitle, task.completed && styles.taskTitleCompleted]}>
+              {task.title}
+            </Text>
+            <Text style={styles.taskInfo}>
+              {task.assignee} • {task.points} Punkte
+              {task.recurring !== 'none' && ` • ${task.recurring === 'daily' ? 'täglich' : 'wöchentlich'}`}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  listContainer: {
+    backgroundColor: '#FFFFFF',
     padding: 16,
   },
-  taskCard: {
-    backgroundColor: '#fff',
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 20,
+  },
+  taskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  taskInfo: {
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    borderRadius: 4,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 48,
+  },
+  checkboxCompleted: {
+    backgroundColor: '#3B82F6',
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  taskDetails: {
     flex: 1,
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  taskMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  taskUser: {
-    fontSize: 14,
-    color: '#666',
-  },
-  taskPoints: {
-    fontSize: 14,
-    color: '#4A90E2',
     fontWeight: '500',
+    color: '#1F2937',
+    marginBottom: 4,
   },
-  recurringBadge: {
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+  taskTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#6B7280',
   },
-  recurringText: {
-    fontSize: 12,
-    color: '#FF9800',
-  },
-  completeButton: {
-    padding: 4,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#999',
-    marginTop: 50,
+  taskInfo: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });

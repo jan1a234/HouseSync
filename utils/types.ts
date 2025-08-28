@@ -7,12 +7,9 @@ export interface User {
 export interface Task {
   id: string;
   title: string;
-  assignedTo: string;
+  assignee: string;
   points: number;
   completed: boolean;
-  recurring?: 'daily' | 'weekly' | null;
-  createdAt: string;
-  completedAt?: string;
+  recurring: 'none' | 'daily' | 'weekly';
+  lastCompleted?: Date;
 }
-
-export type RecurringType = 'daily' | 'weekly' | null;
